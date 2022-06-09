@@ -8,7 +8,7 @@
 
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-0evHe/X+R7YkIZDRvuzKMRqM+OrBnVFBL6DOitfPri4tjfHxaWutUpFmBp4vmVor" crossorigin="anonymous">
 
-        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🤡</text></svg>">
+        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%22%22>🤡</text></svg>">
         
         <style>
             html {
@@ -165,7 +165,7 @@
             console.log(populationMin, populationMax)
 
             var myColor = d3.scaleSequential()
-                .interpolator(d3.interpolateOrRd)
+                .interpolator(d3.interpolateRdPu)
                 .domain([populationMin, populationMax])
 
             // Sort the data in the map data first for faster matching
@@ -245,15 +245,19 @@
 
             console.log(legendPositionY)
 
+            let gradientStops = d3.range(0, 110, 10).map(function (d) {
+                let populationRange = populationMax - populationMin
+                return {offset: `${d}%`, color: myColor(populationRange / 100 * d)}
+            })
+
+            console.log(gradientStops)
+
             var linearGradient = d3.select("svg defs").append('linearGradient')
 		        .attr('id', 'linear-gradient');
 
             // append multiple color stops by using D3's data/enter step
             linearGradient.selectAll("stop")
-                .data([
-                    {offset: "0%", color: myColor(populationMin)},
-                    {offset: "100%", color: myColor(populationMax)}
-                ])
+                .data(gradientStops)
                 .enter().append("stop")
                 .attr("offset", function(d) { 
                     return d.offset; 
