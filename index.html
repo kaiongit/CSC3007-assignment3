@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+
+        <script src="https://d3js.org/d3.v7.min.js"></script>
+        <script src="https://d3js.org/topojson.v2.min.js"></script>
+
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-0evHe/X+R7YkIZDRvuzKMRqM+OrBnVFBL6DOitfPri4tjfHxaWutUpFmBp4vmVor" crossorigin="anonymous">
+
+        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🤡</text></svg>">
+        
+        <style>
+            html {
+                width: 99.5vw;
+            }
+
+            header {
+                text-align: center;
+            }
+
+            footer {
+                text-align: right;
+            }
+
+            svg {
+                background: snow;
+            }
+
+            #tooltip {
+                background: ghostwhite;
+                border: solid;
+                border-width: 1px;
+                border-radius: 3px;
+                padding: 5px 10px;
+
+                position: absolute;
+                visibility: hidden;
+            }
+
+            header {
+                isolation: isolate;
+            }
+
+            header mark {
+                background-color: transparent;
+            }
+
+            header mark span {
+                color: white;
+                mix-blend-mode: difference;
+            }
+
+            .pride {
+                /* Pride special */
+                background: linear-gradient(to right, red, orange, yellow, green, blue, indigo, black, brown, deepskyblue, pink, silver);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+
+            footer span {
+                width: fit-content;
+                display: inline-block;
+                right: 0;
+                position: relative;
+            }
+
+            path.distric {
+                stroke-width: 1px;
+                stroke: darkgrey;
+            }
+
+            path.distric.selected {
+                mask: url(#mask-stripe);
+            }
+
+            path.planning-area {
+                fill: none;
+                stroke: grey;
+                stroke-width: 1.5px;
+            }
+
+
+        </style>
+    </head>
+
+    <body>
+        <header class="container-lg">
+            <br>
+            <h2>Where the <mark id="sinkies"><span>Sinkies</span></mark> Live vs Where the <mark id="amdks"><span>AMDKs</span></mark> Live</h2>
+            <br>
+        </header>
+
+        <section class="container-lg">
+            <svg id="chart">
+                <defs>
+                    <pattern 
+                        id="pattern-stripe" 
+                        width="4" height="4" 
+                        patternUnits="userSpaceOnUse"
+                        patternTransform="rotate(45)">
+                        <rect width="2" height="4" transform="translate(0,0)" fill="white"></rect>
+                    </pattern>
+                    <mask id="mask-stripe">
+                        <rect x="0" y="0" width="100%" height="100%" fill="url(#pattern-stripe)" />
+                    </mask>      
+                </defs>
+            </svg>
+        </section>
+        
+        <footer class="container-lg">
+            <span>
+                <br>
+                🌈
+                <h6 class="pride">
+                    Data from <a href="https://chi-loong.github.io/CSC3007/assignments/sgmap.json">CL1</a> & <a href="https://chi-loong.github.io/CSC3007/assignments/population2021.csv">CL2</a>
+                    <br>Best viewed on 1080p display
+                </h6>
+                <br>
+            </span>
+        </footer>
+
+        <div id="tooltip">tips</div> 
+
+        <script>
+
+            function intOrZero (s) {
+                return isNaN(s) ? 0 : Number(s);
+            }
+
+            String.prototype.toCamelCase = function () {
+                let upper = true
+                let newStr = ""
+                for (let i = 0, l = this.length; i < l; i++) {
+                    // Note that you can also check for all kinds of spaces  with
+                    // this[i].match(/\s/)
+                    if (this[i] == " ") {
+                        upper = true
+                        newStr += this[i]
+                        continue
+                    }
+                    newStr += upper ? this[i].toUpperCase() : this[i].toLowerCase()
+                    upper = false
+                }
+                return newStr
+            }
+
+            let clSgmapJson = "https://chi-loong.github.io/CSC3007/assignments/sgmap.json";
+            let clPopulation2021Csv = "https://chi-loong.github.io/CSC3007/assignments/population2021.csv";
+            let mySgmapTopojsonJson = "https://raw.githubusercontent.com/kaiongit/CSC3007-assignment3/c463eb45cf8bd321f16ca59e680701211b72af2b/sgmap-topojson.json"
+
+            let width = 1000, height = 600;
+
+            let svg = d3.select("svg")
+                .attr("viewBox", "0 0 " + width + " " + height)
+
+            // Load external data
+            Promise.all([d3.json(clSgmapJson), d3.csv(clPopulation2021Csv), d3.json(mySgmapTopojsonJson)]).then(data => {
+
+            console.log(data[1])
+
+            var populationMin = Math.min(...(data[1].map(d => intOrZero(d.Population))));
+            var populationMax = Math.max(...(data[1].map(d => intOrZero(d.Population))));
+
+            console.log(populationMin, populationMax)
+
+            var myColor = d3.scaleSequential()
+                .interpolator(d3.interpolateOrRd)
+                .domain([populationMin, populationMax])
+
+            // Sort the data in the map data first for faster matching
+            data[0].features.sort(function(a, b) {
+                return a.properties.Name.localeCompare(b.properties.Name)
+            })
+
+            // Linear search map population numbers to map data
+            data[0].features.map(function(lData) {
+                for (var i = 0; i < data[1].length; i++) {
+                    if (lData.properties.Name === data[1][i].Subzone.toUpperCase()) {
+                        lData.properties.Population = data[1][i].Population;
+                        // lData.properties.Name = data[1][i].Subzone;
+                        // lData.properties["Planning Area Name"] = data[1][i]["Planning Area"];
+                        break;
+                    }
+                }
+                lData.properties.Population = intOrZero(lData.properties.Population);
+            })
+
+            console.log(data[0])
+
+            // Map and projection
+            var projection = d3.geoMercator()
+                .center([103.851959, 1.290270])
+                .fitExtent([[20, 20], [980, 580]], data[0]);
+
+            let geopath = d3.geoPath().projection(projection);
+
+
+
+            // Drawing
+            let districtGroup = svg.append("g")
+                .attr("id", "districts")
+
+            let districts = districtGroup.selectAll("path")
+                .data(data[0].features)
+                .enter()
+                    .append("path")
+                    .attr("class", "distric")
+                    .attr("d", d => geopath(d))
+                    .style("fill", d => myColor(d.properties.Population))
+
+            console.log(data[0])
+
+
+            let planningAreaGroup = svg.append("g")
+                .attr("id", "planning-areas")
+
+            // Filter out all unique planning areas
+            let planningAreas = [...new Set(data[0].features.map(d => d.properties["Planning Area Code"]))]
+
+            planningAreas.forEach(function (p) {
+                planningAreaGroup.append("path")
+                    .datum(
+                        topojson.merge(
+                            data[2], 
+                            data[2].objects.sgmap.geometries.filter(
+                                function(d) {
+                                    return d.properties["Planning Area Code"] === p
+                                }
+                            )
+                        )
+                    )
+                    .attr("class", "planning-area")
+                    .attr("d", d => geopath(d))
+            });           
+            
+
+
+            // legend
+
+            let legendGradientHeight = 15;
+            let legendGradientWidth = 200;
+            let legendPositionY = height * .9;
+            let legentPositionX = width * .02;
+
+            console.log(legendPositionY)
+
+            var linearGradient = d3.select("svg defs").append('linearGradient')
+		        .attr('id', 'linear-gradient');
+
+            // append multiple color stops by using D3's data/enter step
+            linearGradient.selectAll("stop")
+                .data([
+                    {offset: "0%", color: myColor(populationMin)},
+                    {offset: "100%", color: myColor(populationMax)}
+                ])
+                .enter().append("stop")
+                .attr("offset", function(d) { 
+                    return d.offset; 
+                })
+                .attr("stop-color", function(d) { 
+                    return d.color; 
+                });               
+                
+
+            // draw the rectangle and fill with gradient
+            svg.append("rect")
+                .attr("x", legentPositionX)
+                .attr("y", legendPositionY)
+                .attr("width", legendGradientWidth)
+                .attr("height", legendGradientHeight)
+                .style("fill", "url(#linear-gradient)");
+
+            //create tick marks
+            var xLeg = d3.scaleLinear()
+                .domain([populationMin, populationMax])
+                .range([1, legendGradientWidth]);
+
+            var axisLeg = d3.axisBottom(xLeg)
+                .tickArguments([5, "s"]) // the first argument is a suggestion???
+
+            svg
+                .attr("class", "axis")
+                .append("g")
+                .attr("transform", `translate(${legentPositionX - 1}, ${legendPositionY + legendGradientHeight + 2})`)
+                .call(axisLeg);
+
+
+
+            // Stuff
+            let tooltip = d3.select("#tooltip")
+
+            function whoLivesHere (n) {
+                if (n === 0) return "(Except monkeys and otters)";
+                if (n > (populationMax * .2)) return "(Packed full of Sinkies)";
+                if (n <= (populationMax * .2)) return "(AMDKs paradise)";
+            }
+
+            districts
+                .on("mouseover", function(e) {
+                    tooltip.style("visibility", "visible");
+
+                    d3.select(event.currentTarget)
+                        .attr("class", "distric selected")
+                })
+                .on("mouseout", function() {
+                    tooltip.style("visibility", "hidden");
+
+                    d3.select(event.currentTarget)
+                        .attr("class", "distric")
+                })
+                .on("mousemove", function(e, d) {
+                    tooltip
+                        .style("top", (e.pageY + 10) + "px")
+                        .style("left", (e.pageX + 10) + "px")
+                        .html(
+                            `${d.properties.Name.toCamelCase()} - 
+                            ${d.properties["Planning Area Name"].toCamelCase()} <br> 
+                            ${d.properties.Population.toLocaleString('en', {useGrouping:true})} 
+                            ${whoLivesHere(d.properties.Population)}
+                            `
+                        );
+                });
+
+                d3.select("#sinkies").style("background-color", myColor(populationMax))
+                d3.select("#amdks").style("background-color", myColor(populationMin))
+            })
+
+        </script>
+
+    </body>
+</html>
