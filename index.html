@@ -80,6 +80,14 @@
                 stroke-width: 1.5px;
             }
 
+            g.grabbing {
+                cursor: grabbing;
+            }
+
+            g.scaling {
+                cursor: zoom-in;
+            }
+
 
         </style>
     </head>
@@ -200,6 +208,7 @@
             // Drawing
             let districtGroup = svg.append("g")
                 .attr("id", "districts")
+                .attr("class", "zoomable");
 
             let districts = districtGroup.selectAll("path")
                 .data(data[0].features)
@@ -214,6 +223,7 @@
 
             let planningAreaGroup = svg.append("g")
                 .attr("id", "planning-areas")
+                .attr("class", "zoomable");
 
             // Filter out all unique planning areas
             let planningAreas = [...new Set(data[0].features.map(d => d.properties["Planning Area Code"]))]
@@ -328,8 +338,31 @@
 
                 d3.select("#sinkies").style("background-color", myColor(populationMax))
                 d3.select("#amdks").style("background-color", myColor(populationMin))
-            })
 
+                let g = d3.selectAll("svg g.zoomable")
+
+                var panMargins = 50;
+
+                var zoom = d3.zoom()
+                    .scaleExtent([1, 2])
+                    .translateExtent([[-panMargins, -panMargins],[width + panMargins, height + panMargins]])
+                    .on('zoom', function(event) {
+                        g.selectAll('path')
+                            .attr('transform', event.transform);
+                    })
+                    // parameter destructuring, so ugly
+                    // means property sourceEvent.type is unpacked into variable called type
+                    // or if no rename
+                    // function ({sourceEvent: {type}})
+                    .on('start', function ({sourceEvent: {type: type}}){
+                        g.classed(type === 'wheel' ? 'scaling' : 'grabbing', true)
+                        // console.log(type)
+                    })
+                    .on('end', () => g.classed('grabbing scaling', false))
+
+                svg.call(zoom);
+            
+            })    
         </script>
 
     </body>
